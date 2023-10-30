@@ -18,7 +18,7 @@ type userModel struct {
 	last_name  string
 }
 
-var SQL_SELECT_USER = "SELECT ыт, first_name, last_name FROM users WHERE sn=?"
+var SQL_SELECT_USER = "SELECT sn, first_name, last_name FROM users WHERE sn=?"
 var SQL_CREATE_USER = "INSERT INTO users (first_name, last_name, sn) VALUES(?, ?, ?)"
 
 func main() {
