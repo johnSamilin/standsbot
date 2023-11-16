@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"os"
 	"strconv"
-	"time"
 
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/sirupsen/logrus"
@@ -16,12 +15,9 @@ import (
 	botgolang "github.com/mail-ru-im/bot-golang"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
-)
 
-var ACTION_CHECK_AVAILABILITY = "/checkAvailability"
-var ACTION_GET_STAND = "/getStand"
-var ACTION_RELEASE = "/release"
-var ACTION_CHECK_MY_STANDS = "/checkMyStands"
+	"vk.com/standsbot/menus"
+)
 
 type User struct {
 	gorm.Model
@@ -64,7 +60,7 @@ func main() {
 	var TOKEN = os.Getenv("TOKEN")
 	var API_URL = os.Getenv("API_URL")
 
-	bot, err := botgolang.NewBot(TOKEN, botgolang.BotApiURL(API_URL), botgolang.BotDebug(false))
+	bot, err := botgolang.NewBot(TOKEN, botgolang.BotApiURL(API_URL), botgolang.BotDebug(true))
 	if err != nil {
 		log.Println("wrong token", err)
 		return
@@ -80,34 +76,14 @@ func main() {
 
 	ctx, finish := context.WithCancel(context.Background())
 	defer finish()
+
 	updates := bot.GetUpdatesChannel(ctx)
-	ticker := time.NewTicker(60 * time.Second)
-	quit := make(chan struct{})
-	go func() {
-		for {
-			select {
-			case <-ticker.C:
-				message := bot.NewTextMessage("alexander.saltykov@vk.team", "ping")
-				message.Send()
-			case <-quit:
-				ticker.Stop()
-				return
-			}
-		}
-	}()
 	for update := range updates {
 		sn := update.Payload.BaseEventPayload.From.ID
-
-		ROOT_MENU := botgolang.NewKeyboard()
-		ROOT_MENU.AddRow()
-		ROOT_MENU.AddButton(0, botgolang.NewCallbackButton("Занять песок", ACTION_GET_STAND))
 
 		fmt.Println(update.Type)
 		switch update.Type {
 		case "newMessage":
-			if update.Payload.Text == "стоп" {
-				close(quit)
-			}
 			firstName := update.Payload.BaseEventPayload.From.FirstName
 			lastName := update.Payload.BaseEventPayload.From.LastName
 			var user User
@@ -115,12 +91,12 @@ func main() {
 
 			switch update.Payload.Text {
 			default:
-				buttonMenu := bot.NewInlineKeyboardMessage(sn, "Чего изволите?", ROOT_MENU)
+				buttonMenu := bot.NewInlineKeyboardMessage(sn, "Привет, "+firstName+", чего изволите?", menus.CreateBaseMenu(bot))
 				buttonMenu.Send()
 			}
 		case "callbackQuery":
 			switch update.Payload.CallbackData {
-			case ACTION_CHECK_MY_STANDS:
+			case menus.ACTION_CHECK_MY_STANDS:
 				var stands []Stand
 				text := ""
 				db.Where(Booking{User: User{ID: sn}}).Find(&stands)
@@ -133,7 +109,7 @@ func main() {
 				message := bot.NewTextMessage(sn, text)
 				message.Send()
 
-			case ACTION_GET_STAND:
+			case menus.ACTION_GET_STAND:
 				var stands []Stand
 				var bookings []Booking
 				text := "Сейчас свободны следующие:"
@@ -153,7 +129,7 @@ func main() {
 				}
 				if len(stands) == 0 {
 					text = "Сейчас нет свободных песков :("
-					kb = ROOT_MENU
+					kb = menus.CreateCustomMenu(bot, []menus.Button{menus.BUTTONS[menus.ACTION_TO_QUEUE]})
 				}
 				responseError := buttonResponseClient.SendAnswerCallbackQuery(&botgolang.ButtonResponse{
 					QueryID:   update.Payload.QueryID,
